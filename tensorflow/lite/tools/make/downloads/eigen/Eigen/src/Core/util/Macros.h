@@ -508,13 +508,33 @@
 #define EIGEN_HAS_STATIC_ARRAY_TEMPLATE 0
 #endif
 
-#if EIGEN_MAX_CPP_VER>=11 && (defined(__cplusplus) && (__cplusplus >= 201103L) || EIGEN_COMP_MSVC >= 1900)
+
+// The macro EIGEN_COMP_CXXVER defines the c++ verson expected by the compiler.
+// For instance, if compiling with gcc and -std=c++17, then EIGEN_COMP_CXXVER
+// is defined to 17.
+#if   (defined(__cplusplus) && (__cplusplus >  201402L) || EIGEN_COMP_MSVC >= 1914)
+#define EIGEN_COMP_CXXVER 17
+#elif (defined(__cplusplus) && (__cplusplus >  201103L) || EIGEN_COMP_MSVC >= 1910)
+#define EIGEN_COMP_CXXVER 14
+#elif (defined(__cplusplus) && (__cplusplus >= 201103L) || EIGEN_COMP_MSVC >= 1900)
+#define EIGEN_COMP_CXXVER 11
+#else
+#define EIGEN_COMP_CXXVER 03
+#endif
+
+
+// The macros EIGEN_HAS_CXX?? defines a rough estimate of available c++ features
+// but in practice we should not rely on them but rather on the availabilty of
+// individual features as defined later.
+// This is why there is no EIGEN_HAS_CXX17.
+// FIXME: get rid of EIGEN_HAS_CXX14 and maybe even EIGEN_HAS_CXX11.
+#if EIGEN_MAX_CPP_VER>=11 && EIGEN_COMP_CXXVER>=11
 #define EIGEN_HAS_CXX11 1
 #else
 #define EIGEN_HAS_CXX11 0
 #endif
 
-#if EIGEN_MAX_CPP_VER>=14 && (defined(__cplusplus) && (__cplusplus > 201103L) || EIGEN_COMP_MSVC >= 1910)
+#if EIGEN_MAX_CPP_VER>=14 && EIGEN_COMP_CXXVER>=14
 #define EIGEN_HAS_CXX14 1
 #else
 #define EIGEN_HAS_CXX14 0
@@ -676,6 +696,23 @@
   #else
     #define EIGEN_HAS_CXX11_OVERRIDE_FINAL 0
   #endif
+#endif
+
+// NOTE: the required Apple's clang version is very conservative 
+//       and it could be that XCode 9 works just fine.
+// NOTE: the MSVC version is based on https://en.cppreference.com/w/cpp/compiler_support
+//       and not tested.
+#ifndef EIGEN_HAS_CXX17_OVERALIGN
+#if EIGEN_MAX_CPP_VER>=17 && EIGEN_COMP_CXXVER>=17 && (                                 \
+           (EIGEN_COMP_MSVC >= 1912)                                                    \
+        || (EIGEN_GNUC_AT_LEAST(7,0))                                                   \
+        || ((!defined(__apple_build_version__)) && (EIGEN_COMP_CLANG>=500))             \
+        || (( defined(__apple_build_version__)) && (__apple_build_version__>=10000000)) \
+      )
+#define EIGEN_HAS_CXX17_OVERALIGN 1
+#else
+#define EIGEN_HAS_CXX17_OVERALIGN 0
+#endif
 #endif
 
 #if defined(EIGEN_CUDACC) && EIGEN_HAS_CONSTEXPR
@@ -866,7 +903,7 @@
 // Suppresses 'unused variable' warnings.
 namespace Eigen {
   namespace internal {
-    template<typename T> EIGEN_DEVICE_FUNC void ignore_unused_variable(const T&) {}
+    template<typename T> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void ignore_unused_variable(const T&) {}
   }
 }
 #define EIGEN_UNUSED_VARIABLE(var) Eigen::internal::ignore_unused_variable(var);
@@ -918,6 +955,19 @@ namespace Eigen {
   #define EIGEN_USING_STD_MATH(FUNC) using ::FUNC;
 #else
   #define EIGEN_USING_STD_MATH(FUNC) using std::FUNC;
+#endif
+
+
+// When compiling HIP device code with HIPCC, certain functions
+// from the stdlib need to be pulled in from the global namespace
+// (as opposed to from the std:: namespace). This is because HIPCC
+// does not natively support all the std:: routines in device code.
+// Instead it contains header files that declare the corresponding
+// routines in the global namespace such they can be used in device code.
+#if defined(EIGEN_HIP_DEVICE_COMPILE)
+  #define EIGEN_USING_STD(FUNC) using ::FUNC;
+#else
+  #define EIGEN_USING_STD(FUNC) using std::FUNC;
 #endif
 
 
@@ -1047,7 +1097,7 @@ namespace Eigen {
 #endif
 
 #define EIGEN_MAKE_SCALAR_BINARY_OP_ONTHERIGHT(METHOD,OPNAME) \
-  template <typename T> EIGEN_DEVICE_FUNC inline \
+  template <typename T> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE \
   EIGEN_MSVC10_WORKAROUND_BINARYOP_RETURN_TYPE(const EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE(Derived,typename internal::promote_scalar_arg<Scalar EIGEN_COMMA T EIGEN_COMMA EIGEN_SCALAR_BINARY_SUPPORTED(OPNAME,Scalar,T)>::type,OPNAME))\
   (METHOD)(const T& scalar) const { \
     typedef typename internal::promote_scalar_arg<Scalar,T,EIGEN_SCALAR_BINARY_SUPPORTED(OPNAME,Scalar,T)>::type PromotedT; \
@@ -1056,7 +1106,7 @@ namespace Eigen {
   }
 
 #define EIGEN_MAKE_SCALAR_BINARY_OP_ONTHELEFT(METHOD,OPNAME) \
-  template <typename T> EIGEN_DEVICE_FUNC inline friend \
+  template <typename T> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE friend \
   EIGEN_MSVC10_WORKAROUND_BINARYOP_RETURN_TYPE(const EIGEN_SCALAR_BINARYOP_EXPR_RETURN_TYPE(typename internal::promote_scalar_arg<Scalar EIGEN_COMMA T EIGEN_COMMA EIGEN_SCALAR_BINARY_SUPPORTED(OPNAME,T,Scalar)>::type,Derived,OPNAME)) \
   (METHOD)(const T& scalar, const StorageBaseType& matrix) { \
     typedef typename internal::promote_scalar_arg<Scalar,T,EIGEN_SCALAR_BINARY_SUPPORTED(OPNAME,T,Scalar)>::type PromotedT; \
@@ -1105,9 +1155,9 @@ namespace Eigen {
 #   define EIGEN_NOEXCEPT
 #   define EIGEN_NOEXCEPT_IF(x)
 #   define EIGEN_NO_THROW throw()
-#   if EIGEN_COMP_MSVC
+#   if EIGEN_COMP_MSVC || EIGEN_COMP_CXXVER>=17
       // MSVC does not support exception specifications (warning C4290),
-      // and they are deprecated in c++11 anyway.
+      // and they are deprecated in c++11 anyway. This is even an error in c++17.
 #     define EIGEN_EXCEPTION_SPEC(X) throw()
 #   else
 #     define EIGEN_EXCEPTION_SPEC(X) throw(X)

@@ -117,14 +117,15 @@ template<> struct unpacket_traits<Packet8f> {
   typedef float     type;
   typedef Packet4f  half;
   typedef Packet8i  integer_packet;
-  enum {size=8, alignment=Aligned32, vectorizable=true};
+  typedef uint8_t   mask_t;
+  enum {size=8, alignment=Aligned32, vectorizable=true, masked_load_available=true, masked_store_available=true};
 };
 template<> struct unpacket_traits<Packet4d> {
   typedef double type;
   typedef Packet2d half;
-  enum {size=4, alignment=Aligned32, vectorizable=true};
+  enum {size=4, alignment=Aligned32, vectorizable=true, masked_load_available=false, masked_store_available=false};
 };
-template<> struct unpacket_traits<Packet8i> { typedef int    type; typedef Packet4i half; enum {size=8, alignment=Aligned32, vectorizable=false}; };
+template<> struct unpacket_traits<Packet8i> { typedef int    type; typedef Packet4i half; enum {size=8, alignment=Aligned32, vectorizable=false, masked_load_available=false, masked_store_available=false}; };
 
 template<> EIGEN_STRONG_INLINE Packet8f pset1<Packet8f>(const float&  from) { return _mm256_set1_ps(from); }
 template<> EIGEN_STRONG_INLINE Packet4d pset1<Packet4d>(const double& from) { return _mm256_set1_pd(from); }
@@ -209,20 +210,51 @@ template<> EIGEN_STRONG_INLINE Packet4d pmadd(const Packet4d& a, const Packet4d&
 #endif
 
 template<> EIGEN_STRONG_INLINE Packet8f pmin<Packet8f>(const Packet8f& a, const Packet8f& b) {
+#if EIGEN_COMP_GNUC && EIGEN_COMP_GNUC < 63
+  // There appears to be a bug in GCC, by which the optimizer may flip
+  // the argument order in calls to _mm_min_ps/_mm_max_ps, so we have to
+  // resort to inline ASM here. This is supposed to be fixed in gcc6.3,
+  // see also: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=72867
+  Packet8f res;
+  asm("vminps %[a], %[b], %[res]" : [res] "=x" (res) : [a] "x" (a), [b] "x" (b));
+  return res;
+#else
   // Arguments are swapped to match NaN propagation behavior of std::min.
   return _mm256_min_ps(b,a);
+#endif
 }
 template<> EIGEN_STRONG_INLINE Packet4d pmin<Packet4d>(const Packet4d& a, const Packet4d& b) {
+#if EIGEN_COMP_GNUC && EIGEN_COMP_GNUC < 63
+  // See pmin above
+  Packet4d res;
+  asm("vminpd %[a], %[b], %[res]" : [res] "=x" (res) : [a] "x" (a), [b] "x" (b));
+  return res;
+#else
   // Arguments are swapped to match NaN propagation behavior of std::min.
   return _mm256_min_pd(b,a);
+#endif
 }
 template<> EIGEN_STRONG_INLINE Packet8f pmax<Packet8f>(const Packet8f& a, const Packet8f& b) {
+#if EIGEN_COMP_GNUC && EIGEN_COMP_GNUC < 63
+  // See pmin above
+  Packet8f res;
+  asm("vmaxps %[a], %[b], %[res]" : [res] "=x" (res) : [a] "x" (a), [b] "x" (b));
+  return res;
+#else
   // Arguments are swapped to match NaN propagation behavior of std::max.
   return _mm256_max_ps(b,a);
+#endif
 }
 template<> EIGEN_STRONG_INLINE Packet4d pmax<Packet4d>(const Packet4d& a, const Packet4d& b) {
+#if EIGEN_COMP_GNUC && EIGEN_COMP_GNUC < 63
+  // See pmin above
+  Packet4d res;
+  asm("vmaxpd %[a], %[b], %[res]" : [res] "=x" (res) : [a] "x" (a), [b] "x" (b));
+  return res;
+#else
   // Arguments are swapped to match NaN propagation behavior of std::max.
   return _mm256_max_pd(b,a);
+#endif
 }
 
 template<> EIGEN_STRONG_INLINE Packet8f pcmp_le(const Packet8f& a, const Packet8f& b) { return _mm256_cmp_ps(a,b,_CMP_LE_OQ); }
@@ -354,6 +386,14 @@ template<> EIGEN_STRONG_INLINE Packet8f ploadu<Packet8f>(const float* from) { EI
 template<> EIGEN_STRONG_INLINE Packet4d ploadu<Packet4d>(const double* from) { EIGEN_DEBUG_UNALIGNED_LOAD return _mm256_loadu_pd(from); }
 template<> EIGEN_STRONG_INLINE Packet8i ploadu<Packet8i>(const int* from) { EIGEN_DEBUG_UNALIGNED_LOAD return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(from)); }
 
+template<> EIGEN_STRONG_INLINE Packet8f ploadu<Packet8f>(const float* from, uint8_t umask) {
+  Packet8i mask = _mm256_set1_epi8(static_cast<char>(umask));
+  const Packet8i bit_mask = _mm256_set_epi32(0xffffff7f, 0xffffffbf, 0xffffffdf, 0xffffffef, 0xfffffff7, 0xfffffffb, 0xfffffffd, 0xfffffffe);
+  mask = por<Packet8i>(mask, bit_mask);
+  mask = pcmp_eq<Packet8i>(mask, _mm256_set1_epi32(0xffffffff));
+  EIGEN_DEBUG_UNALIGNED_LOAD return _mm256_maskload_ps(from, mask);
+}
+
 // Loads 4 floats from memory a returns the packet {a0, a0  a1, a1, a2, a2, a3, a3}
 template<> EIGEN_STRONG_INLINE Packet8f ploaddup<Packet8f>(const float* from)
 {
@@ -390,6 +430,14 @@ template<> EIGEN_STRONG_INLINE void pstore<int>(int*       to, const Packet8i& f
 template<> EIGEN_STRONG_INLINE void pstoreu<float>(float*   to, const Packet8f& from) { EIGEN_DEBUG_UNALIGNED_STORE _mm256_storeu_ps(to, from); }
 template<> EIGEN_STRONG_INLINE void pstoreu<double>(double* to, const Packet4d& from) { EIGEN_DEBUG_UNALIGNED_STORE _mm256_storeu_pd(to, from); }
 template<> EIGEN_STRONG_INLINE void pstoreu<int>(int*       to, const Packet8i& from) { EIGEN_DEBUG_UNALIGNED_STORE _mm256_storeu_si256(reinterpret_cast<__m256i*>(to), from); }
+
+template<> EIGEN_STRONG_INLINE void pstoreu<float>(float*   to, const Packet8f& from, uint8_t umask) {
+  Packet8i mask = _mm256_set1_epi8(static_cast<char>(umask));
+  const Packet8i bit_mask = _mm256_set_epi32(0xffffff7f, 0xffffffbf, 0xffffffdf, 0xffffffef, 0xfffffff7, 0xfffffffb, 0xfffffffd, 0xfffffffe);
+  mask = por<Packet8i>(mask, bit_mask);
+  mask = pcmp_eq<Packet8i>(mask, _mm256_set1_epi32(0xffffffff));
+  EIGEN_DEBUG_UNALIGNED_STORE return _mm256_maskstore_ps(to, mask, from);
+}
 
 // NOTE: leverage _mm256_i32gather_ps and _mm256_i32gather_pd if AVX2 instructions are available
 // NOTE: for the record the following seems to be slower: return _mm256_i32gather_ps(from, _mm256_set1_epi32(stride), 4);

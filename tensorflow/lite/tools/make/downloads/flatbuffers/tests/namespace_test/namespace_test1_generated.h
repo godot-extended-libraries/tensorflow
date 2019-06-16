@@ -45,7 +45,8 @@ inline const char * const *EnumNamesEnumInNestedNS() {
 }
 
 inline const char *EnumNameEnumInNestedNS(EnumInNestedNS e) {
-  const size_t index = static_cast<int>(e);
+  if (e < EnumInNestedNS_A || e > EnumInNestedNS_C) return "";
+  const size_t index = static_cast<size_t>(e);
   return EnumNamesEnumInNestedNS()[index];
 }
 
@@ -55,8 +56,11 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) StructInNestedNS FLATBUFFERS_FINAL_CLASS 
   int32_t b_;
 
  public:
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return StructInNestedNSTypeTable();
+  }
   StructInNestedNS() {
-    memset(this, 0, sizeof(StructInNestedNS));
+    memset(static_cast<void *>(this), 0, sizeof(StructInNestedNS));
   }
   StructInNestedNS(int32_t _a, int32_t _b)
       : a_(flatbuffers::EndianScalar(_a)),
@@ -81,7 +85,7 @@ struct TableInNestedNS FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   static const flatbuffers::TypeTable *MiniReflectTypeTable() {
     return TableInNestedNSTypeTable();
   }
-  enum {
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_FOO = 4
   };
   int32_t foo() const {
@@ -161,7 +165,7 @@ inline const flatbuffers::TypeTable *StructInNestedNSTypeTable() {
     { flatbuffers::ET_INT, 0, -1 },
     { flatbuffers::ET_INT, 0, -1 }
   };
-  static const int32_t values[] = { 0, 4, 8 };
+  static const int64_t values[] = { 0, 4, 8 };
   static const char * const names[] = {
     "a",
     "b"

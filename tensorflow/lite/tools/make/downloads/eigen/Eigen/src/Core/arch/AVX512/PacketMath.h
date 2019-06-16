@@ -102,19 +102,20 @@ struct unpacket_traits<Packet16f> {
   typedef float type;
   typedef Packet8f half;
   typedef Packet16i integer_packet;
-  enum { size = 16, alignment=Aligned64, vectorizable=true };
+  typedef uint16_t mask_t;
+  enum { size = 16, alignment=Aligned64, vectorizable=true, masked_load_available=true, masked_store_available=true };
 };
 template <>
 struct unpacket_traits<Packet8d> {
   typedef double type;
   typedef Packet4d half;
-  enum { size = 8, alignment=Aligned64, vectorizable=true };
+  enum { size = 8, alignment=Aligned64, vectorizable=true, masked_load_available=false, masked_store_available=false };
 };
 template <>
 struct unpacket_traits<Packet16i> {
   typedef int type;
   typedef Packet8i half;
-  enum { size = 16, alignment=Aligned64, vectorizable=false };
+  enum { size = 16, alignment=Aligned64, vectorizable=false, masked_load_available=false, masked_store_available=false };
 };
 
 template <>
@@ -141,7 +142,7 @@ EIGEN_STRONG_INLINE Packet16f pload1<Packet16f>(const float* from) {
 }
 template <>
 EIGEN_STRONG_INLINE Packet8d pload1<Packet8d>(const double* from) {
-  return _mm512_broadcastsd_pd(_mm_load_pd1(from));
+  return _mm512_set1_pd(*from);
 }
 
 template <>
@@ -167,6 +168,11 @@ EIGEN_STRONG_INLINE Packet8d padd<Packet8d>(const Packet8d& a,
                                             const Packet8d& b) {
   return _mm512_add_pd(a, b);
 }
+template <>
+EIGEN_STRONG_INLINE Packet16i padd<Packet16i>(const Packet16i& a,
+                                              const Packet16i& b) {
+  return _mm512_add_epi32(a, b);
+}
 
 template <>
 EIGEN_STRONG_INLINE Packet16f psub<Packet16f>(const Packet16f& a,
@@ -177,6 +183,11 @@ template <>
 EIGEN_STRONG_INLINE Packet8d psub<Packet8d>(const Packet8d& a,
                                             const Packet8d& b) {
   return _mm512_sub_pd(a, b);
+}
+template <>
+EIGEN_STRONG_INLINE Packet16i psub<Packet16i>(const Packet16i& a,
+                                              const Packet16i& b) {
+  return _mm512_sub_epi32(a, b);
 }
 
 template <>
@@ -210,6 +221,11 @@ template <>
 EIGEN_STRONG_INLINE Packet8d pmul<Packet8d>(const Packet8d& a,
                                             const Packet8d& b) {
   return _mm512_mul_pd(a, b);
+}
+template <>
+EIGEN_STRONG_INLINE Packet16i pmul<Packet16i>(const Packet16i& a,
+                                              const Packet16i& b) {
+  return _mm512_mul_epi32(a, b);
 }
 
 template <>
@@ -470,6 +486,12 @@ EIGEN_STRONG_INLINE Packet16i ploadu<Packet16i>(const int* from) {
       reinterpret_cast<const __m512i*>(from));
 }
 
+template <>
+EIGEN_STRONG_INLINE Packet16f ploadu<Packet16f>(const float* from, uint16_t umask) {
+  __mmask16 mask = static_cast<__mmask16>(umask);
+  EIGEN_DEBUG_UNALIGNED_LOAD return _mm512_maskz_loadu_ps(mask, from);
+}
+
 // Loads 8 floats from memory a returns the packet
 // {a0, a0  a1, a1, a2, a2, a3, a3, a4, a4, a5, a5, a6, a6, a7, a7}
 template <>
@@ -511,21 +533,17 @@ EIGEN_STRONG_INLINE Packet8d ploaddup<Packet8d>(const double* from) {
 // {a0, a0  a0, a0, a1, a1, a1, a1, a2, a2, a2, a2, a3, a3, a3, a3}
 template <>
 EIGEN_STRONG_INLINE Packet16f ploadquad<Packet16f>(const float* from) {
-  Packet16f tmp = _mm512_undefined_ps();
-  tmp = _mm512_insertf32x4(tmp, _mm_load_ps1(from), 0);
-  tmp = _mm512_insertf32x4(tmp, _mm_load_ps1(from + 1), 1);
-  tmp = _mm512_insertf32x4(tmp, _mm_load_ps1(from + 2), 2);
-  tmp = _mm512_insertf32x4(tmp, _mm_load_ps1(from + 3), 3);
-  return tmp;
+  Packet16f tmp = _mm512_castps128_ps512(ploadu<Packet4f>(from));
+  const Packet16i scatter_mask = _mm512_set_epi32(3,3,3,3, 2,2,2,2, 1,1,1,1, 0,0,0,0);
+  return _mm512_permutexvar_ps(scatter_mask, tmp);
 }
+
 // Loads 2 doubles from memory a returns the packet
 // {a0, a0  a0, a0, a1, a1, a1, a1}
 template <>
 EIGEN_STRONG_INLINE Packet8d ploadquad<Packet8d>(const double* from) {
-  __m128d tmp0 = _mm_load_pd1(from);
-  __m256d lane0 = _mm256_broadcastsd_pd(tmp0);
-  __m128d tmp1 = _mm_load_pd1(from + 1);
-  __m256d lane1 = _mm256_broadcastsd_pd(tmp1);
+  __m256d lane0 = _mm256_set1_pd(*from);
+  __m256d lane1 = _mm256_set1_pd(*(from+1));
   __m512d tmp = _mm512_undefined_pd();
   tmp = _mm512_insertf64x4(tmp, lane0, 0);
   return _mm512_insertf64x4(tmp, lane1, 1);
@@ -557,6 +575,11 @@ template <>
 EIGEN_STRONG_INLINE void pstoreu<int>(int* to, const Packet16i& from) {
   EIGEN_DEBUG_UNALIGNED_STORE _mm512_storeu_si512(
       reinterpret_cast<__m512i*>(to), from);
+}
+template <>
+EIGEN_STRONG_INLINE void pstoreu<float>(float* to, const Packet16f& from, uint16_t umask) {
+  __mmask16 mask = static_cast<__mmask16>(umask);
+  EIGEN_DEBUG_UNALIGNED_STORE return _mm512_mask_storeu_ps(to, mask, from);
 }
 
 template <>

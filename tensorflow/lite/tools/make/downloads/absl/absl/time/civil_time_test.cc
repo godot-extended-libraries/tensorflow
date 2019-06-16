@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//      https://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -1028,7 +1028,7 @@ TEST(CivilTime, LeapYears) {
 TEST(CivilTime, FirstThursdayInMonth) {
   const absl::CivilDay nov1(2014, 11, 1);
   const absl::CivilDay thursday =
-      absl::PrevWeekday(nov1, absl::Weekday::thursday) + 7;
+      absl::NextWeekday(nov1 - 1, absl::Weekday::thursday);
   EXPECT_EQ("2014-11-06", absl::FormatCivilTime(thursday));
 
   // Bonus: Date of Thanksgiving in the United States

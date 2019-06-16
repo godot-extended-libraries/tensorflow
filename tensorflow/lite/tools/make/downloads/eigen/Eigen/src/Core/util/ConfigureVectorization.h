@@ -261,7 +261,7 @@
       #define EIGEN_VECTORIZE_FMA
     #endif
     #if defined(__AVX512F__)
-      #ifndef __FMA__
+      #ifndef EIGEN_VECTORIZE_FMA
       #if EIGEN_COMP_GNUC
       #error Please add -mfma to your compiler flags: compiling with -mavx512f alone without SSE/AVX FMA is not supported (bug 1638).
       #else
@@ -396,17 +396,8 @@
 #endif
 
 #if defined(EIGEN_HIP_DEVICE_COMPILE)
-
   #define EIGEN_HAS_HIP_FP16
   #include <hip/hip_fp16.h>
-
-  #define HIP_PATCH_WITH_NEW_FP16 18215
-  #if (HIP_VERSION_PATCH < HIP_PATCH_WITH_NEW_FP16)
-    #define EIGEN_HAS_OLD_HIP_FP16
-    // Old HIP implementation does not have a explicit typedef for "half2"
-    typedef __half2 half2;
-  #endif
-
 #endif
 
 

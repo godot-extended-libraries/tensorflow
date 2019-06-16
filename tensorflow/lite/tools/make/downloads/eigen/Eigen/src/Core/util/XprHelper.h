@@ -185,7 +185,9 @@ template<typename T> struct unpacket_traits
   {
     size = 1,
     alignment = 1,
-    vectorizable = false
+    vectorizable = false,
+    masked_load_available=false,
+    masked_store_available=false
   };
 };
 

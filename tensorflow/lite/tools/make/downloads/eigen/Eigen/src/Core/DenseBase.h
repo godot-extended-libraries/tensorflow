@@ -266,7 +266,7 @@ template<typename Derived> class DenseBase
     /** \internal Represents a matrix with all coefficients equal to one another*/
     typedef CwiseNullaryOp<internal::scalar_constant_op<Scalar>,PlainObject> ConstantReturnType;
     /** \internal \deprecated Represents a vector with linearly spaced coefficients that allows sequential access only. */
-    typedef CwiseNullaryOp<internal::linspaced_op<Scalar>,PlainObject> SequentialLinSpacedReturnType;
+    EIGEN_DEPRECATED typedef CwiseNullaryOp<internal::linspaced_op<Scalar>,PlainObject> SequentialLinSpacedReturnType;
     /** \internal Represents a vector with linearly spaced coefficients that allows random access. */
     typedef CwiseNullaryOp<internal::linspaced_op<Scalar>,PlainObject> RandomAccessLinSpacedReturnType;
     /** \internal the return type of MatrixBase::eigenvalues() */
@@ -302,17 +302,17 @@ template<typename Derived> class DenseBase
     Derived& operator=(const ReturnByValue<OtherDerived>& func);
 
     /** \internal
-      * Copies \a other into *this without evaluating other. \returns a reference to *this.
-      * \deprecated */
+      * Copies \a other into *this without evaluating other. \returns a reference to *this. */
     template<typename OtherDerived>
-    EIGEN_DEVICE_FUNC
+    /** \deprecated */
+    EIGEN_DEPRECATED EIGEN_DEVICE_FUNC
     Derived& lazyAssign(const DenseBase<OtherDerived>& other);
 
     EIGEN_DEVICE_FUNC
     CommaInitializer<Derived> operator<< (const Scalar& s);
 
-    /** \deprecated it now returns \c *this */
     template<unsigned int Added,unsigned int Removed>
+    /** \deprecated it now returns \c *this */
     EIGEN_DEPRECATED
     const Derived& flagged() const
     { return derived(); }
@@ -337,12 +337,20 @@ template<typename Derived> class DenseBase
     EIGEN_DEVICE_FUNC static const ConstantReturnType
     Constant(const Scalar& value);
 
-    EIGEN_DEVICE_FUNC static const SequentialLinSpacedReturnType
+    /** \deprecated because of accuracy loss.
+      * In Eigen 3.3, it is an alias for LinSpaced(Index,const Scalar&,const Scalar&)
+      */
+    EIGEN_DEPRECATED EIGEN_DEVICE_FUNC static const RandomAccessLinSpacedReturnType
     LinSpaced(Sequential_t, Index size, const Scalar& low, const Scalar& high);
+
+    /** \deprecated because of accuracy loss.
+      * In Eigen 3.3, it is an alias for LinSpaced(const Scalar&,const Scalar&)
+      */
+    EIGEN_DEPRECATED EIGEN_DEVICE_FUNC static const RandomAccessLinSpacedReturnType
+    LinSpaced(Sequential_t, const Scalar& low, const Scalar& high);
+
     EIGEN_DEVICE_FUNC static const RandomAccessLinSpacedReturnType
     LinSpaced(Index size, const Scalar& low, const Scalar& high);
-    EIGEN_DEVICE_FUNC static const SequentialLinSpacedReturnType
-    LinSpaced(Sequential_t, const Scalar& low, const Scalar& high);
     EIGEN_DEVICE_FUNC static const RandomAccessLinSpacedReturnType
     LinSpaced(const Scalar& low, const Scalar& high);
 
@@ -374,7 +382,7 @@ template<typename Derived> class DenseBase
     template<typename OtherDerived> EIGEN_DEVICE_FUNC
     bool isApprox(const DenseBase<OtherDerived>& other,
                   const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
-    EIGEN_DEVICE_FUNC 
+    EIGEN_DEVICE_FUNC
     bool isMuchSmallerThan(const RealScalar& other,
                            const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     template<typename OtherDerived> EIGEN_DEVICE_FUNC
@@ -385,7 +393,7 @@ template<typename Derived> class DenseBase
     EIGEN_DEVICE_FUNC bool isConstant(const Scalar& value, const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     EIGEN_DEVICE_FUNC bool isZero(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
     EIGEN_DEVICE_FUNC bool isOnes(const RealScalar& prec = NumTraits<Scalar>::dummy_precision()) const;
-    
+
     inline bool hasNaN() const;
     inline bool allFinite() const;
 
@@ -399,7 +407,7 @@ template<typename Derived> class DenseBase
       *
       * Notice that in the case of a plain matrix or vector (not an expression) this function just returns
       * a const reference, in order to avoid a useless copy.
-      * 
+      *
       * \warning Be careful with eval() and the auto C++ keyword, as detailed in this \link TopicPitfalls_auto_keyword page \endlink.
       */
     EIGEN_DEVICE_FUNC
@@ -415,7 +423,7 @@ template<typename Derived> class DenseBase
       *
       */
     template<typename OtherDerived>
-    EIGEN_DEVICE_FUNC
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
     void swap(const DenseBase<OtherDerived>& other)
     {
       EIGEN_STATIC_ASSERT(!OtherDerived::IsPlainObjectBase,THIS_EXPRESSION_IS_NOT_A_LVALUE__IT_IS_READ_ONLY);
@@ -427,7 +435,7 @@ template<typename Derived> class DenseBase
       *
       */
     template<typename OtherDerived>
-    EIGEN_DEVICE_FUNC
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
     void swap(PlainObjectBase<OtherDerived>& other)
     {
       eigen_assert(rows()==other.rows() && cols()==other.cols());

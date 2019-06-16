@@ -13,12 +13,21 @@ var NamespaceA = NamespaceA || {};
 NamespaceA.NamespaceB = NamespaceA.NamespaceB || {};
 
 /**
- * @enum
+ * @enum {number}
  */
 NamespaceA.NamespaceB.EnumInNestedNS = {
   A: 0,
   B: 1,
   C: 2
+};
+
+/**
+ * @enum {string}
+ */
+NamespaceA.NamespaceB.EnumInNestedNSName = {
+  0: 'A',
+  1: 'B',
+  2: 'C'
 };
 
 /**
@@ -102,6 +111,17 @@ NamespaceA.NamespaceB.TableInNestedNS.endTableInNestedNS = function(builder) {
   var offset = builder.endObject();
   return offset;
 };
+
+/**
+ * @param {flatbuffers.Builder} builder
+ * @param {number} foo
+ * @returns {flatbuffers.Offset}
+ */
+NamespaceA.NamespaceB.TableInNestedNS.createTableInNestedNS = function(builder, foo) {
+  NamespaceA.NamespaceB.TableInNestedNS.startTableInNestedNS(builder);
+  NamespaceA.NamespaceB.TableInNestedNS.addFoo(builder, foo);
+  return NamespaceA.NamespaceB.TableInNestedNS.endTableInNestedNS(builder);
+}
 
 /**
  * @constructor
